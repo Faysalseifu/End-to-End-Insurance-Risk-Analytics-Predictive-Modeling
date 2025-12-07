@@ -2,52 +2,64 @@
 # data_processing.py
 # -----------------------------------------------
 
+from pathlib import Path
+from typing import Iterable, List
+
 # Importing necessary libraries
 import pandas as pd              # Pandas: used for loading data and cleaning
 import numpy as np               # Numpy: used for numerical operations
 from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
-# LabelEncoder: converts categories -> numbers
-# StandardScaler: standardizes values (mean=0, std=1)
-# MinMaxScaler: scales values to 0–1 range
 
 # ------------------------------------------------
 # FUNCTION 1: Load and Clean Data
 # ------------------------------------------------
-def load_and_clean_data(filepath):
-    data = pd.read_csv(filepath)  
-    # pandas reads the CSV file and converts it into a DataFrame (table format)
+def load_and_clean_data(filepath: str) -> pd.DataFrame:
+    """Load a CSV file with minimal validation and duplicate removal."""
 
-    # Removing duplicates
+    path = Path(filepath)
+    if not path.is_file():
+        raise FileNotFoundError(f"Data file not found: {filepath}")
+
+    try:
+        data = pd.read_csv(path)
+    except pd.errors.EmptyDataError as exc:
+        raise ValueError(f"CSV is empty: {filepath}") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(f"Failed to read CSV: {filepath}") from exc
+
+    if data.empty:
+        raise ValueError(f"Dataset loaded but is empty: {filepath}")
+
     data = data.drop_duplicates(keep="first")
-    # Drop exact duplicate rows – keeps only the first occurrence.
-    # This reduces noise and prevents duplicated examples from affecting the model.
-
     return data  # returns cleaned dataset
 
 
 # ------------------------------------------------
 # FUNCTION 2: Encoding Categorical Variables
 # ------------------------------------------------
-def encoder(method, dataframe, columns_label, columns_onehot):
+def _validate_columns(df: pd.DataFrame, columns: Iterable[str]) -> List[str]:
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        raise ValueError(f"Columns not found in dataframe: {missing}")
+    return list(columns)
+
+
+def encoder(method: str, dataframe: pd.DataFrame, columns_label, columns_onehot):
 
     # ---------------------------
     # METHOD 1: LABEL ENCODER
     # ---------------------------
-    if method == 'labelEncoder':      
-        df_lbl = dataframe.copy()   
-        # Make a copy to avoid overwriting original data
+    if method == 'labelEncoder':
+        df_lbl = dataframe.copy()
+        cols = _validate_columns(df_lbl, columns_label)
 
-        for col in columns_label:
-            label = LabelEncoder()  
-            # LabelEncoder converts categories → integers
-            # Example: ["Male","Female"] → [1,0]
-
-            label.fit(list(dataframe[col].values))
-            # Learns unique categories in the column (e.g., "SUV","Sedan","Bus")
-
-            df_lbl[col] = label.transform(df_lbl[col].values)
-            # Transforms each category to a number
-            # MACHINE LEARNING MODELS need numbers, not text!
+        for col in cols:
+            try:
+                label = LabelEncoder()
+                label.fit(list(df_lbl[col].values))
+                df_lbl[col] = label.transform(df_lbl[col].values)
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"Failed label encoding for column '{col}'") from exc
 
         return df_lbl
     
@@ -56,18 +68,19 @@ def encoder(method, dataframe, columns_label, columns_onehot):
     # ---------------------------
     elif method == 'oneHotEncoder':
         df_oh = dataframe.copy()
+        cols = _validate_columns(df_oh, columns_onehot)
 
-        df_oh = pd.get_dummies(
-            data=df_oh,
-            prefix='ohe',          # Adds prefix before new columns
-            prefix_sep='_',        # Separator in column name 
-            columns=columns_onehot,# Columns to encode
-            drop_first=True,       # Drops first category to avoid "dummy variable trap"
-            dtype='int8'           # Makes new columns memory-efficient
-        )
-        # One-hot encoding example:
-        # Color = ["Red","Blue","Green"]
-        # → ohe_Color_Blue (0/1), ohe_Color_Green (0/1)
+        try:
+            df_oh = pd.get_dummies(
+                data=df_oh,
+                prefix='ohe',
+                prefix_sep='_',
+                columns=cols,
+                drop_first=True,
+                dtype='int8'
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed one-hot encoding") from exc
 
         return df_oh
 
@@ -75,23 +88,18 @@ def encoder(method, dataframe, columns_label, columns_onehot):
 # ------------------------------------------------
 # FUNCTION 3: SCALING NUMERICAL VARIABLES
 # ------------------------------------------------
-def scaler(method, data, columns_scaler):
+def scaler(method: str, data: pd.DataFrame, columns_scaler):
 
     # ---------------------------
     # METHOD 1: STANDARD SCALER
     # ---------------------------
     if method == 'standardScaler':
-        Standard = StandardScaler()
-        # StandardScaler converts values so that:
-        # mean = 0  
-        # standard deviation = 1
-        # It is used in models like Linear Regression, SVM, Logistic Regression.
-
         df_standard = data.copy()
-        df_standard[columns_scaler] = Standard.fit_transform(df_standard[columns_scaler])
-        # Fit: learn mean & std from data
-        # Transform: apply (x - mean)/std
-        # Makes all numerical columns comparable in scale
+        cols = _validate_columns(df_standard, columns_scaler)
+        try:
+            df_standard[cols] = StandardScaler().fit_transform(df_standard[cols])
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed standard scaling") from exc
 
         return df_standard
         
@@ -99,15 +107,12 @@ def scaler(method, data, columns_scaler):
     # METHOD 2: MIN-MAX SCALER
     # ---------------------------
     elif method == 'minMaxScaler':
-        MinMax = MinMaxScaler()
-        # MinMaxScaler transforms values between 0 and 1
-        # Useful for:
-        # - Neural Networks
-        # - Distance-based models (KNN, KMeans)
-
         df_minmax = data.copy()
-        df_minmax[columns_scaler] = MinMax.fit_transform(df_minmax[columns_scaler])
-        # Formula: (x - min) / (max - min)
+        cols = _validate_columns(df_minmax, columns_scaler)
+        try:
+            df_minmax[cols] = MinMaxScaler().fit_transform(df_minmax[cols])
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed min-max scaling") from exc
 
         return df_minmax
     
@@ -116,17 +121,13 @@ def scaler(method, data, columns_scaler):
     # ---------------------------
     elif method == 'npLog':
         df_nplog = data.copy()
-
-        # Log transformation example:
-        # If column = [1, 10, 100, 1000]
-        # log(column) = [0, 2.30, 4.60, 6.90]
-        #
-        # WHY USE LOG?
-        # - Reduces effect of extreme values (outliers)
-        # - Helps "skewed" data become more normal
-        # - Improves linear model performance
-
-        df_nplog[columns_scaler] = np.log(df_nplog[columns_scaler])
+        cols = _validate_columns(df_nplog, columns_scaler)
+        if (df_nplog[cols] <= 0).any().any():
+            raise ValueError("Log transform requires strictly positive values")
+        try:
+            df_nplog[cols] = np.log(df_nplog[cols])
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed log transform") from exc
         return df_nplog
-    
-    return data  # fallback if no method chosen
+
+    raise ValueError(f"Unsupported scaling method: {method}")
