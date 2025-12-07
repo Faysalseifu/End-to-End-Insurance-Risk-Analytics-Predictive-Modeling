@@ -1,0 +1,5 @@
+outs:
+- md5: c55fc2da9960971577b37e4381b0c9e4
+  size: 78
+  hash: md5
+  path: processed_data.txt
