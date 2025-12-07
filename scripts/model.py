@@ -39,6 +39,8 @@ def split_data(X, y, test_size=0.2, random_state=42):
     - test_size=0.2 → 20% goes to testing, 80% used for training.
     - random_state ensures reproducibility (same split every run).
     """
+    if len(X) == 0 or len(y) == 0:
+        raise ValueError("Cannot split empty feature/target arrays")
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
 
@@ -51,27 +53,23 @@ def train_models(X_train, y_train):
     Each model learns patterns from X_train to predict y_train.
     """
 
+    if len(X_train) == 0 or len(y_train) == 0:
+        raise ValueError("Training data is empty")
+
     # ---------- Initialize Models ----------
-    # Linear Regression → simple baseline model
     lr_model = LinearRegression()
-
-    # Decision Tree → learns hierarchical rules (if/else)
     dt_model = DecisionTreeRegressor(random_state=42)
-
-    # Random Forest → multiple trees averaged together (reduces overfitting)
     rfr_model = RandomForestRegressor(random_state=42)
-
-    # XGBoost → boosting method that iteratively improves predictions
     xgb_model = xgb.XGBRegressor(random_state=42)
 
-    # ---------- Train (Fit) Models ----------
-    # Each .fit() step is the "learning" process.
-    lr_model.fit(X_train, y_train)
-    dt_model.fit(X_train, y_train)
-    rfr_model.fit(X_train, y_train)
-    xgb_model.fit(X_train, y_train)
+    try:
+        lr_model.fit(X_train, y_train)
+        dt_model.fit(X_train, y_train)
+        rfr_model.fit(X_train, y_train)
+        xgb_model.fit(X_train, y_train)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("Model training failed") from exc
 
-    # Return all trained models for evaluation/comparison
     return lr_model, dt_model, rfr_model, xgb_model
 
 
@@ -86,10 +84,14 @@ def evaluate_model(model, X_test, y_test):
     - R²   → goodness of fit (1 = perfect)
     """
 
-    # Make predictions using the trained model
-    y_pred = model.predict(X_test)
+    if len(X_test) == 0 or len(y_test) == 0:
+        raise ValueError("Cannot evaluate on empty test set")
 
-    # Calculate regression evaluation metrics
+    try:
+        y_pred = model.predict(X_test)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("Model prediction failed") from exc
+
     mae = mean_absolute_error(y_test, y_pred)   # Lower = better
     mse = mean_squared_error(y_test, y_pred)    # Lower = better
     r2 = r2_score(y_test, y_pred)               # Higher = better (max = 1)
