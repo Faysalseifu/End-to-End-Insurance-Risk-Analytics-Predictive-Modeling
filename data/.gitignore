@@ -1,3 +1,4 @@
-insurance.txt
-processed_data
-raw_data
+/raw_data.txt
+/processed_data.txt
+/insurance.csv
+/insurance.txt
