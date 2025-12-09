@@ -86,12 +86,12 @@ def plot_charges_relationships(df: pd.DataFrame, out_dir: Path) -> Path:
     return path
 
 
-def run_basic_eda(data_path: str, out_dir: str = "reports/eda") -> Dict[str, Path]:
+def run_basic_eda(data_path: str, out_dir: str = "reports/eda", sep: str | None = None) -> Dict[str, Path]:
     """Execute minimal, repeatable EDA and persist outputs.
 
     Returns a mapping of artifact labels to file paths.
     """
-    df = load_and_clean_data(data_path)
+    df = load_and_clean_data(data_path, sep=sep)
     out_dir_path = Path(out_dir)
 
     artifacts: Dict[str, Path] = {}
@@ -105,10 +105,11 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Run minimal EDA and save artifacts")
-    parser.add_argument("--data", type=str, default="data/insurance.csv", help="Path to CSV data")
+    parser.add_argument("--data", type=str, default="data/insurance.csv", help="Path to delimited data file")
     parser.add_argument("--out", type=str, default="reports/eda", help="Directory to store EDA outputs")
+    parser.add_argument("--sep", type=str, default=None, help="Field delimiter (auto-detect when omitted)")
     args = parser.parse_args()
 
-    artifacts = run_basic_eda(args.data, args.out)
+    artifacts = run_basic_eda(args.data, args.out, sep=args.sep)
     for label, path in artifacts.items():
         print(f"{label}: {path}")
