@@ -13,19 +13,21 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler, MinMaxScaler
 # ------------------------------------------------
 # FUNCTION 1: Load and Clean Data
 # ------------------------------------------------
-def load_and_clean_data(filepath: str) -> pd.DataFrame:
-    """Load a CSV file with minimal validation and duplicate removal."""
+def load_and_clean_data(filepath: str, sep: str | None = None) -> pd.DataFrame:
+    """Load a delimited text file, with optional separator override and duplicate removal."""
 
     path = Path(filepath)
     if not path.is_file():
         raise FileNotFoundError(f"Data file not found: {filepath}")
 
+    read_kwargs = {"sep": sep} if sep is not None else {"sep": None, "engine": "python"}
+
     try:
-        data = pd.read_csv(path)
+        data = pd.read_csv(path, **read_kwargs)
     except pd.errors.EmptyDataError as exc:
-        raise ValueError(f"CSV is empty: {filepath}") from exc
+        raise ValueError(f"Input file is empty: {filepath}") from exc
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(f"Failed to read CSV: {filepath}") from exc
+        raise RuntimeError(f"Failed to read delimited file: {filepath}") from exc
 
     if data.empty:
         raise ValueError(f"Dataset loaded but is empty: {filepath}")
