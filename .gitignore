@@ -29,3 +29,4 @@ Thumbs.db
 
 # other
 .envrc
+.dvc-storage/
