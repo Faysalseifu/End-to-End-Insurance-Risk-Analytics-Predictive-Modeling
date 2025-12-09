@@ -10,6 +10,16 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## DVC workflow (local remote)
+
+- Install: `pip install dvc`
+- Initialize: `dvc init`
+- Create local remote directory: `mkdir -p ../.dvc-storage` (from repo root)
+- Configure default remote: `dvc remote add -d localstorage ../.dvc-storage`
+- Track data: `dvc add data/insurance.csv data/raw_data.txt data/processed_data.txt`
+- Push artifacts: `dvc push`
+- Commit to git: add `.dvc` files plus `data/.gitignore`; never commit raw data files.
+
 ## Running EDA notebook
 
 - Open `notebooks/Exploratory Data Analysis.ipynb` in Jupyter Lab or VS Code.
