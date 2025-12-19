@@ -1,0 +1,125 @@
+End-to-End Insurance Risk Analytics and Pricing Strategy
+=======================================================
+
+Executive Overview
+------------------
+- Objective: Grow ACIS auto portfolio profitably by identifying low-risk, high-margin segments and aligning premiums and marketing spend to underlying risk.
+- Core finding: Geography dominates risk. Provinces and postal codes show significant loss ratio differences; gender does not. Premium and vehicle value proxies are secondary; cover selections and vehicle specs matter, but less than location.
+- Actions: Introduce geo-based pricing bands, run A/B pricing tests in low-risk zips, tighten underwriting in high-risk zips, and remove gender from pricing logic. Monitor loss ratio and margin weekly by geography.
+- Reproducibility: Git + CI for code, DVC for data lineage, notebooks/scripts for deterministic runs. SHAP adds interpretability to tree models.
+
+Business Problem and Goals
+--------------------------
+- ACIS wants to expand market share without eroding margin. Mispriced segments either lose customers (overpricing low-risk) or destroy margin (underpricing high-risk).
+- Goal: Price closer to risk and focus acquisition on low-risk zips and provinces while protecting margin in high-risk areas.
+- Success criteria: Lower loss ratio in discounted segments, stable or improved margin per policy, and measurable conversion/retention lift in targeted offers.
+
+Data and Preparation
+--------------------
+- Source: Historical auto policies with premiums, claims, geography (province, postal code), vehicle attributes, cover details, and demographics.
+- Key derived fields:
+  - LossRatio = TotalClaims / TotalPremium
+  - Margin = TotalPremium - TotalClaims
+  - ClaimOccured = 1 if TotalClaims > 0 else 0
+- Cleaning: Type coercion for numerics; handling inf/NaN in loss ratios; standardizing cases; imputing missing numeric values. Columns aligned to expected schema in EDA notebook.
+
+Exploratory Data Analysis (EDA)
+-------------------------------
+- Distributions: Loss ratio is right-skewed with outliers. Margins vary widely across records.
+- Geography:
+  - Provinces: Clear differences in claim frequency and severity; some provinces combine higher frequency and severity.
+  - Postal codes: Even stronger granularity; some zips pair low frequency with low severity (ideal targets), others show high variability.
+- Vehicle and cover hints: Certain body types, kilowatts/cubic capacity, and cover categories associate with higher claims; effects are weaker than geography.
+- Artifacts: Summary stats, missingness tables, correlation heatmaps, and distribution plots saved under reports/eda.
+
+Hypothesis Testing
+------------------
+- H1: Loss ratio differs by province (Kruskal-Wallis H ~ 23.35, p ~ 0.001) -> Reject H0. Provinces materially differ in risk.
+- H2: Loss ratio differs by top postal codes (Kruskal-Wallis H ~ 25.5, p ~ 0.005) -> Reject H0. Strong within-province granularity.
+- H3: Margin differs by top postal codes (Kruskal-Wallis H ~ 24.4, p ~ 0.007) -> Reject H0. Profitability varies by zip.
+- H4: Loss ratio differs by gender (Mann-Whitney U p ~ 0.86) -> Fail to reject H0. No meaningful gender effect.
+- Conclusion: Geography is the dominant segmentation axis; gender should not drive pricing.
+
+Modeling Approach
+-----------------
+- Target: Claim severity (TotalClaims) on records with claims > 0.
+- Features: Numeric vehicle/financial fields; categorical features (province, postal code, cover attributes, customer/product fields) one-hot encoded.
+- Preprocessing: Numeric coercion; mean imputation; one-hot encoding; train/test split 70/30 with random_state=42; casting to float for compatibility.
+- Models trained:
+  - Linear Regression (baseline linear signal).
+  - Random Forest Regressor (non-linear interactions).
+  - XGBoost Regressor (boosted trees for tabular performance).
+- Metrics: RMSE and R^2 on hold-out. Tree models outperform linear where geo/product interactions are non-linear.
+
+Interpretability (SHAP)
+-----------------------
+- SHAP summary on Random Forest highlights top drivers:
+  - Geography dummies (province and postal code) dominate contributions.
+  - Premium level and vehicle value proxies (SumInsured, CustomValueEstimate) have strong positive influence on predicted severity.
+  - Coverage selections (cover type/group) and vehicle specs (kilowatts, cubic capacity) are secondary.
+- Use case: Justifies pricing adjustments and supports governance with transparent feature importance.
+
+Business Recommendations
+------------------------
+1) Geo-Based Pricing Bands
+- Create tiered premiums by province and refine by top-decile postal codes.
+- Discount low-risk zips by 10-15% to win share; modestly load high-risk zips to protect margin.
+
+2) Targeted Acquisition and Offers
+- Prioritize marketing spend in low-risk, high-margin zips. Combine premium discounts with onboarding offers (e.g., deductibles, value-added services).
+- De-emphasize spend in high-risk zips unless paired with stricter underwriting or adjusted cover.
+
+3) Underwriting Guardrails
+- In high-risk zips, tighten eligibility (vehicle age/value, cover group, deductibles) instead of blanket price hikes.
+- Offer higher deductibles or narrower cover for risky combinations to reduce loss ratio volatility.
+
+4) Product and Coverage Strategy
+- Maintain richer cover options in stable, low-variance zips.
+- In high-variance zips, steer toward products that shift risk (higher excess, specific exclusions) while monitoring take-up and retention.
+
+5) Fairness and Compliance
+- Remove gender from pricing logic (statistically insignificant and often restricted by regulation).
+- Focus on geographic and behavioral proxies; document rationale using SHAP outputs.
+
+6) Monitoring and Alerts
+- Track realized loss ratio and margin weekly by province and zip.
+- Set alert thresholds; trigger reviews when loss ratio exceeds band limits or when margin deteriorates beyond tolerance.
+
+A/B Test Plan (Geo-Pricing)
+---------------------------
+- Population: New quotes in identified low-risk postal codes.
+- Design: Control = current pricing; Treatment = 10-15% discount.
+- Metrics: Conversion lift, 90-day retention, realized loss ratio at 90/180 days, margin per policy.
+- Duration/Power: Run 4-6 weeks or until minimum detectable effect is reached based on quote volume.
+- Guardrails: Stop-loss if treatment loss ratio exceeds predefined tolerance or if margin per policy drops below threshold.
+
+Limitations
+-----------
+- Missingness and coercion: Numeric coercion and imputation may hide data quality issues; unobserved confounders (driving behavior, telematics) absent.
+- Temporal drift: Models trained on historical slices; seasonality/regulatory shifts may reduce lift; requires time-based validation.
+- High-cardinality features: One-hot encoding inflates feature space; sparse interactions may be underfit.
+- Severity-only focus: Frequency modeled implicitly via ClaimOccured. A two-part (frequency x severity) approach could improve pricing precision.
+
+Future Work
+-----------
+- Two-Part Modeling: Separate frequency (classification) and severity (regression) and combine for pure premium.
+- Actuarial Models: Add Tweedie/Poisson-Gamma GLMs or gradient boosting variants; compare lift to tree ensembles.
+- Feature Compression: Target encoding or embeddings for high-cardinality zips/products to reduce sparsity.
+- Temporal Backtesting: Rolling-origin validation; monitor drift with PSI/KS on key features and predictions.
+- Telematics and Behavior: Incorporate driving scores if available to improve lift over geography proxies.
+- MLOps Hardening: CI checks for data drift, schema validation, and automated DVC stage runs.
+
+Reproducibility Guide
+---------------------
+- Prereqs: Git and DVC installed; pull repo and `dvc pull` for data.
+- EDA: Run notebooks/eda.ipynb or scripts/eda.py to regenerate summary tables/plots to reports/eda.
+- Hypothesis tests: Execute notebooks/hypothesis_testing.ipynb.
+- Modeling: Run notebooks/predictive_model.ipynb for training and SHAP plots.
+- Pipeline: Use `dvc repro` to rebuild the pipeline end-to-end once stages are wired.
+
+Key Takeaways
+-------------
+- Geography is the dominant risk driver; gender is non-predictive.
+- Pricing should be localized (province -> zip) with discounts in low-risk zips and protective loads/guardrails in high-risk zips.
+- Tree-based models with SHAP provide both performance and interpretability to support pricing decisions.
+- Continuous monitoring and controlled experiments (A/B tests) are essential to ensure pricing changes improve both growth and profitability.
